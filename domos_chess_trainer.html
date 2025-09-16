@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blind Chess Trainer</title>
+  <style>
+    /* Basic page styling */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f4f4f4;
+      color: #333;
+    }
+    h1 {
+      margin-top: 0;
+    }
+    p {
+      max-width: 700px;
+    }
+    #controls {
+      margin-top: 15px;
+    }
+    input#moveInput {
+      font-size: 1rem;
+      padding: 5px;
+      width: 200px;
+    }
+    button {
+      padding: 6px 12px;
+      margin-left: 5px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    #messages {
+      margin-top: 10px;
+      min-height: 1.2em;
+      font-weight: bold;
+    }
+    #log {
+      margin-top: 15px;
+      white-space: pre-wrap;
+      background-color: #fff;
+      border: 1px solid #ccc;
+      padding: 10px;
+      max-width: 340px;
+    }
+    /* Chessboard styling */
+    #board {
+      margin-top: 20px;
+    }
+    table.board-table {
+      border-collapse: collapse;
+      margin-top: 5px;
+    }
+    table.board-table td {
+      width: 40px;
+      height: 40px;
+      text-align: center;
+      vertical-align: middle;
+      font-size: 28px;
+      font-weight: normal;
+    }
+    /* Light and dark squares */
+    .light {
+      background-color: #f0d9b5;
+    }
+    .dark {
+      background-color: #b58863;
+    }
+  </style>
+</head>
+<body>
+  <h1>Blind Chess Trainer</h1>
+  <p>
+    Enter your moves using algebraic notation (for example <strong>e4</strong>, <strong>Nf3</strong>, or
+    <strong>O-O</strong>). You play as White against the built‑in computer opponent. Use the drop‑down
+    labeled “Opponent strength” to adjust how strong the computer plays (Easy, Medium or Hard).
+    After you submit a legal move (click “Make Move” or press Enter), the computer will respond
+    automatically. Illegal moves are rejected. Use the “Show Board” button to reveal the current
+    position. You can reset the game at any time.
+  </p>
+  <div id="controls">
+    <input type="text" id="moveInput" placeholder="Enter move" autocomplete="off">
+    <button id="moveBtn">Make Move</button>
+    <button id="toggleBoardBtn">Show Board</button>
+    <button id="resetBtn">Reset Game</button>
+    <!-- Difficulty selector for AI strength -->
+    <label for="difficulty">Opponent strength:</label>
+    <select id="difficulty">
+      <option value="1">Easy</option>
+      <option value="2" selected>Medium</option>
+      <option value="3">Hard</option>
+    </select>
+  </div>
+  <div id="messages"></div>
+  <div id="log"></div>
+  <div id="board" style="display: none;"></div>
+
+  <!-- Embedded chess.js library encoded in base64. This library handles move generation,
+       validation, and detection of check, checkmate, stalemate and other end conditions.
+       The code below will decode and evaluate the library so that this HTML file is completely self‑contained. -->
+  <script>
+    const chessJsBase64 =
+      "dmFyIENoZXNzPWZ1bmN0aW9uKHIpe3ZhciB1PSJiIixzPSJ3IixsPS0xLF89InAiLEE9Im4iLFM9" +
+      "ImIiLG09InIiLHk9InEiLHA9ImsiLHQ9InBuYnJxa1BOQlJRSyIsZT0icm5icWtibnIvcHBwcHBw" +
+      "cHAvOC84LzgvOC9QUFBQUFBQUC9STkJRS0JOUiB3IEtRa3EgLSAwIDEiLGc9WyIxLTAiLCIwLTEi" +
+      "LCIxLzItMS8yIiwiKiJdLEM9e2I6WzE2LDMyLDE3LDE1XSx3OlstMTYsLTMyLC0xNywtMTVdfSxU" +
+      "PXtuOlstMTgsLTMzLC0zMSwtMTQsMTgsMzMsMzEsMTRdLGI6Wy0xNywtMTUsMTcsMTVdLHI6Wy0x" +
+      "NiwxLDE2LC0xXSxxOlstMTcsLTE2LC0xNSwxLDE3LDE2LDE1LC0xXSxrOlstMTcsLTE2LC0xNSwx" +
+      "LDE3LDE2LDE1LC0xXX0sYz1bMjAsMCwwLDAsMCwwLDAsMjQsMCwwLDAsMCwwLDAsMjAsMCwwLDIw" +
+      "LDAsMCwwLDAsMCwyNCwwLDAsMCwwLDAsMjAsMCwwLDAsMCwyMCwwLDAsMCwwLDI0LDAsMCwwLDAs" +
+      "MjAsMCwwLDAsMCwwLDAsMjAsMCwwLDAsMjQsMCwwLDAsMjAsMCwwLDAsMCwwLDAsMCwwLDIwLDAs" +
+      "MCwyNCwwLDAsMjAsMCwwLDAsMCwwLDAsMCwwLDAsMCwyMCwyLDI0LDIsMjAsMCwwLDAsMCwwLDAs" +
+      "MCwwLDAsMCwwLDIsNTMsNTYsNTMsMiwwLDAsMCwwLDAsMCwyNCwyNCwyNCwyNCwyNCwyNCw1Niww" +
+      "LDU2LDI0LDI0LDI0LDI0LDI0LDI0LDAsMCwwLDAsMCwwLDIsNTMsNTYsNTMsMiwwLDAsMCwwLDAs" +
+      "MCwwLDAsMCwwLDAsMjAsMiwyNCwyLDIwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMjAsMCwwLDI0LDAs" +
+      "MCwyMCwwLDAsMCwwLDAsMCwwLDAsMjAsMCwwLDAsMjQsMCwwLDAsMjAsMCwwLDAsMCwwLDAsMjAs" +
+      "MCwwLDAsMCwyNCwwLDAsMCwwLDIwLDAsMCwwLDAsMjAsMCwwLDAsMCwwLDI0LDAsMCwwLDAsMCwy" +
+      "MCwwLDAsMjAsMCwwLDAsMCwwLDAsMjQsMCwwLDAsMCwwLDAsMjBdLHY9WzE3LDAsMCwwLDAsMCww" +
+      "LDE2LDAsMCwwLDAsMCwwLDE1LDAsMCwxNywwLDAsMCwwLDAsMTYsMCwwLDAsMCwwLDE1LDAsMCww" +
+      "LDAsMTcsMCwwLDAsMCwxNiwwLDAsMCwwLDE1LDAsMCwwLDAsMCwwLDE3LDAsMCwwLDE2LDAsMCww" +
+      "LDE1LDAsMCwwLDAsMCwwLDAsMCwxNywwLDAsMTYsMCwwLDE1LDAsMCwwLDAsMCwwLDAsMCwwLDAs" +
+      "MTcsMCwxNiwwLDE1LDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDE3LDE2LDE1LDAsMCwwLDAsMCww" +
+      "LDAsMSwxLDEsMSwxLDEsMSwwLC0xLC0xLC0xLC0xLC0xLC0xLC0xLDAsMCwwLDAsMCwwLDAsLTE1" +
+      "LC0xNiwtMTcsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsLTE1LDAsLTE2LDAsLTE3LDAsMCwwLDAs" +
+      "MCwwLDAsMCwwLDAsLTE1LDAsMCwtMTYsMCwwLC0xNywwLDAsMCwwLDAsMCwwLDAsLTE1LDAsMCww" +
+      "LC0xNiwwLDAsMCwtMTcsMCwwLDAsMCwwLDAsLTE1LDAsMCwwLDAsLTE2LDAsMCwwLDAsLTE3LDAs" +
+      "MCwwLDAsLTE1LDAsMCwwLDAsMCwtMTYsMCwwLDAsMCwwLC0xNywwLDAsLTE1LDAsMCwwLDAsMCww" +
+      "LC0xNiwwLDAsMCwwLDAsMCwtMTddLGg9e3A6MCxuOjEsYjoyLHI6MyxxOjQsazo1fSxvPXtOT1JN" +
+      "QUw6Im4iLENBUFRVUkU6ImMiLEJJR19QQVdOOiJiIixFUF9DQVBUVVJFOiJlIixQUk9NT1RJT046" +
+      "InAiLEtTSURFX0NBU1RMRToiayIsUVNJREVfQ0FTVExFOiJxIn0sST17Tk9STUFMOjEsQ0FQVFVS" +
+      "RToyLEJJR19QQVdOOjQsRVBfQ0FQVFVSRTo4LFBST01PVElPTjoxNixLU0lERV9DQVNUTEU6MzIs" +
+      "UVNJREVfQ0FTVExFOjY0fSxQPTcsdz02LEw9MSxSPTAsTj17YTg6MCxiODoxLGM4OjIsZDg6Myxl" +
+      "ODo0LGY4OjUsZzg6NixoODo3LGE3OjE2LGI3OjE3LGM3OjE4LGQ3OjE5LGU3OjIwLGY3OjIxLGc3" +
+      "OjIyLGg3OjIzLGE2OjMyLGI2OjMzLGM2OjM0LGQ2OjM1LGU2OjM2LGY2OjM3LGc2OjM4LGg2OjM5" +
+      "LGE1OjQ4LGI1OjQ5LGM1OjUwLGQ1OjUxLGU1OjUyLGY1OjUzLGc1OjU0LGg1OjU1LGE0OjY0LGI0" +
+      "OjY1LGM0OjY2LGQ0OjY3LGU0OjY4LGY0OjY5LGc0OjcwLGg0OjcxLGEzOjgwLGIzOjgxLGMzOjgy" +
+      "LGQzOjgzLGUzOjg0LGYzOjg1LGczOjg2LGgzOjg3LGEyOjk2LGIyOjk3LGMyOjk4LGQyOjk5LGUy" +
+      "OjEwMCxmMjoxMDEsZzI6MTAyLGgyOjEwMyxhMToxMTIsYjE6MTEzLGMxOjExNCxkMToxMTUsZTE6" +
+      "MTE2LGYxOjExNyxnMToxMTgsaDE6MTE5fSxFPXt3Olt7c3F1YXJlOk4uYTEsZmxhZzpJLlFTSURF" +
+      "X0NBU1RMRX0se3NxdWFyZTpOLmgxLGZsYWc6SS5LU0lERV9DQVNUTEV9XSxiOlt7c3F1YXJlOk4u" +
+      "YTgsZmxhZzpJLlFTSURFX0NBU1RMRX0se3NxdWFyZTpOLmg4LGZsYWc6SS5LU0lERV9DQVNUTEV9" +
+      "XX0sTz1uZXcgQXJyYXkoMTI4KSxrPXt3OmwsYjpsfSxxPXMsRD17dzowLGI6MH0sSz1sLGQ9MCxi" +
+      "PTEsUT1bXSxVPXt9O2Z1bmN0aW9uIHgocil7dm9pZCAwPT09ciYmKHI9ITEpLE89bmV3IEFycmF5" +
+      "KDEyOCksaz17dzpsLGI6bH0scT1zLEQ9e3c6MCxiOjB9LEs9bCxkPTAsYj0xLFE9W10scnx8KFU9" +
+      "e30pLEYoTSgpKX1mdW5jdGlvbiBqKCl7QihlKX1mdW5jdGlvbiBCKHIsZSl7dm9pZCAwPT09ZSYm" +
+      "KGU9ITEpO3ZhciBuPXIuc3BsaXQoL1xzKy8pLHQ9blswXSxvPTA7aWYoISQocikudmFsaWQpcmV0" +
+      "dXJuITE7eChlKTtmb3IodmFyIGk9MDtpPHQubGVuZ3RoO2krKyl7dmFyIGY9dC5jaGFyQXQoaSk7" +
+      "aWYoIi8iPT09ZilvKz04O2Vsc2UgaWYoLTEhPT0iMDEyMzQ1Njc4OSIuaW5kZXhPZihmKSlvKz1w" +
+      "YXJzZUludChmLDEwKTtlbHNle3ZhciBhPWY8ImEiP3M6dTtXKHt0eXBlOmYudG9Mb3dlckNhc2Uo" +
+      "KSxjb2xvcjphfSxmcihvKSksbysrfX1yZXR1cm4gcT1uWzFdLC0xPG5bMl0uaW5kZXhPZigiSyIp" +
+      "JiYoRC53fD1JLktTSURFX0NBU1RMRSksLTE8blsyXS5pbmRleE9mKCJRIikmJihELnd8PUkuUVNJ" +
+      "REVfQ0FTVExFKSwtMTxuWzJdLmluZGV4T2YoImsiKSYmKEQuYnw9SS5LU0lERV9DQVNUTEUpLC0x" +
+      "PG5bMl0uaW5kZXhPZigicSIpJiYoRC5ifD1JLlFTSURFX0NBU1RMRSksSz0iLSI9PT1uWzNdP2w6" +
+      "TltuWzNdXSxkPXBhcnNlSW50KG5bNF0sMTApLGI9cGFyc2VJbnQobls1XSwxMCksRihNKCkpLCEw" +
+      "fWZ1bmN0aW9uICQocil7dmFyIGU9Ik5vIGVycm9ycy4iLG49IkZFTiBzdHJpbmcgbXVzdCBjb250" +
+      "YWluIHNpeCBzcGFjZS1kZWxpbWl0ZWQgZmllbGRzLiIsdD0iNnRoIGZpZWxkIChtb3ZlIG51bWJl" +
+      "cikgbXVzdCBiZSBhIHBvc2l0aXZlIGludGVnZXIuIixvPSI1dGggZmllbGQgKGhhbGYgbW92ZSBj" +
+      "b3VudGVyKSBtdXN0IGJlIGEgbm9uLW5lZ2F0aXZlIGludGVnZXIuIixpPSI0dGggZmllbGQgKGVu" +
+      "LXBhc3NhbnQgc3F1YXJlKSBpcyBpbnZhbGlkLiIsZj0iM3JkIGZpZWxkIChjYXN0bGluZyBhdmFp" +
+      "bGFiaWxpdHkpIGlzIGludmFsaWQuIixhPSIybmQgZmllbGQgKHNpZGUgdG8gbW92ZSkgaXMgaW52" +
+      "YWxpZC4iLGw9IjFzdCBmaWVsZCAocGllY2UgcG9zaXRpb25zKSBkb2VzIG5vdCBjb250YWluIDgg" +
+      "Jy8nLWRlbGltaXRlZCByb3dzLiIsdT0iMXN0IGZpZWxkIChwaWVjZSBwb3NpdGlvbnMpIGlzIGlu" +
+      "dmFsaWQgW2NvbnNlY3V0aXZlIG51bWJlcnNdLiIscz0iMXN0IGZpZWxkIChwaWVjZSBwb3NpdGlv" +
+      "bnMpIGlzIGludmFsaWQgW2ludmFsaWQgcGllY2VdLiIscD0iMXN0IGZpZWxkIChwaWVjZSBwb3Np" +
+      "dGlvbnMpIGlzIGludmFsaWQgW3JvdyB0b28gbGFyZ2VdLiIsYz0iSWxsZWdhbCBlbi1wYXNzYW50" +
+      "IHNxdWFyZSIsdj1yLnNwbGl0KC9ccysvKTtpZig2IT09di5sZW5ndGgpcmV0dXJue3ZhbGlkOiEx" +
+      "LGVycm9yX251bWJlcjoxLGVycm9yOm59O2lmKGlzTmFOKHZbNV0pfHxwYXJzZUludCh2WzVdLDEw" +
+      "KTw9MClyZXR1cm57dmFsaWQ6ITEsZXJyb3JfbnVtYmVyOjIsZXJyb3I6dH07aWYoaXNOYU4odls0" +
+      "XSl8fHBhcnNlSW50KHZbNF0sMTApPDApcmV0dXJue3ZhbGlkOiExLGVycm9yX251bWJlcjozLGVy" +
+      "cm9yOm99O2lmKCEvXigtfFthYmNkZWZnaF1bMzZdKSQvLnRlc3QodlszXSkpcmV0dXJue3ZhbGlk" +
+      "OiExLGVycm9yX251bWJlcjo0LGVycm9yOml9O2lmKCEvXihLUT9rP3E/fFFrP3E/fGtxP3xxfC0p" +
+      "JC8udGVzdCh2WzJdKSlyZXR1cm57dmFsaWQ6ITEsZXJyb3JfbnVtYmVyOjUsZXJyb3I6Zn07aWYo" +
+      "IS9eKHd8YikkLy50ZXN0KHZbMV0pKXJldHVybnt2YWxpZDohMSxlcnJvcl9udW1iZXI6NixlcnJv" +
+      "cjphfTt2YXIgZz12WzBdLnNwbGl0KCIvIik7aWYoOCE9PWcubGVuZ3RoKXJldHVybnt2YWxpZDoh" +
+      "MSxlcnJvcl9udW1iZXI6NyxlcnJvcjpsfTtmb3IodmFyIGg9MDtoPGcubGVuZ3RoO2grKyl7Zm9y" +
+      "KHZhciBFPTAsZD0hMSxiPTA7YjxnW2hdLmxlbmd0aDtiKyspaWYoaXNOYU4oZ1toXVtiXSkpe2lm" +
+      "KCEvXltwcm5icWtQUk5CUUtdJC8udGVzdChnW2hdW2JdKSlyZXR1cm57dmFsaWQ6ITEsZXJyb3Jf" +
+      "bnVtYmVyOjksZXJyb3I6c307RSs9MSxkPSExfWVsc2V7aWYoZClyZXR1cm57dmFsaWQ6ITEsZXJy" +
+      "b3JfbnVtYmVyOjgsZXJyb3I6dX07RSs9cGFyc2VJbnQoZ1toXVtiXSwxMCksZD0hMH1pZig4IT09" +
+      "RSlyZXR1cm57dmFsaWQ6ITEsZXJyb3JfbnVtYmVyOjEwLGVycm9yOnB9fXJldHVybiIzIj09dlsz" +
+      "XVsxXSYmInciPT12WzFdfHwiNiI9PXZbM11bMV0mJiJiIj09dlsxXT97dmFsaWQ6ITEsZXJyb3Jf" +
+      "bnVtYmVyOjExLGVycm9yOmN9Ont2YWxpZDohMCxlcnJvcl9udW1iZXI6MCxlcnJvcjplfX1mdW5j" +
+      "dGlvbiBNKCl7Zm9yKHZhciByPTAsZT0iIixuPU4uYTg7bjw9Ti5oMTtuKyspe2lmKG51bGw9PU9b" +
+      "bl0pcisrO2Vsc2V7MDxyJiYoZSs9cixyPTApO3ZhciB0PU9bbl0uY29sb3Isbz1PW25dLnR5cGU7" +
+      "ZSs9dD09PXM/by50b1VwcGVyQ2FzZSgpOm8udG9Mb3dlckNhc2UoKX1uKzEmMTM2JiYoMDxyJiYo" +
+      "ZSs9ciksbiE9PU4uaDEmJihlKz0iLyIpLHI9MCxuKz04KX12YXIgaT0iIjtEW3NdJkkuS1NJREVf" +
+      "Q0FTVExFJiYoaSs9IksiKSxEW3NdJkkuUVNJREVfQ0FTVExFJiYoaSs9IlEiKSxEW3VdJkkuS1NJ" +
+      "REVfQ0FTVExFJiYoaSs9ImsiKSxEW3VdJkkuUVNJREVfQ0FTVExFJiYoaSs9InEiKSxpPWl8fCIt" +
+      "Ijt2YXIgZj1LPT09bD8iLSI6ZnIoSyk7cmV0dXJuW2UscSxpLGYsZCxiXS5qb2luKCIgIil9ZnVu" +
+      "Y3Rpb24gRyhyKXtmb3IodmFyIGU9MDtlPHIubGVuZ3RoO2UrPTIpInN0cmluZyI9PXR5cGVvZiBy" +
+      "W2VdJiYic3RyaW5nIj09dHlwZW9mIHJbZSsxXSYmKFVbcltlXV09cltlKzFdKTtyZXR1cm4gVX1m" +
+      "dW5jdGlvbiBGKHIpezA8US5sZW5ndGh8fChyIT09ZT8oVS5TZXRVcD0iMSIsVS5GRU49cik6KGRl" +
+      "bGV0ZSBVLlNldFVwLGRlbGV0ZSBVLkZFTikpfWZ1bmN0aW9uIGkocil7dmFyIGU9T1tOW3JdXTty" +
+      "ZXR1cm4gZT97dHlwZTplLnR5cGUsY29sb3I6ZS5jb2xvcn06bnVsbH1mdW5jdGlvbiBXKHIsZSl7" +
+      "aWYoISgidHlwZSJpbiByJiYiY29sb3IiaW4gcikpcmV0dXJuITE7aWYoLTE9PT10LmluZGV4T2Yo" +
+      "ci50eXBlLnRvTG93ZXJDYXNlKCkpKXJldHVybiExO2lmKCEoZSBpbiBOKSlyZXR1cm4hMTt2YXIg" +
+      "bj1OW2VdO3JldHVybihyLnR5cGUhPXB8fGtbci5jb2xvcl09PWx8fGtbci5jb2xvcl09PW4pJiYo" +
+      "T1tuXT17dHlwZTpyLnR5cGUsY29sb3I6ci5jb2xvcn0sci50eXBlPT09cCYmKGtbci5jb2xvcl09" +
+      "biksRihNKCkpLCEwKX1mdW5jdGlvbiBIKHIsZSxuLHQsbyl7dmFyIGk9e2NvbG9yOnEsZnJvbTpl" +
+      "LHRvOm4sZmxhZ3M6dCxwaWVjZTpyW2VdLnR5cGV9O3JldHVybiBvJiYoaS5mbGFnc3w9SS5QUk9N" +
+      "T1RJT04saS5wcm9tb3Rpb249bykscltuXT9pLmNhcHR1cmVkPXJbbl0udHlwZTp0JkkuRVBfQ0FQ" +
+      "VFVSRSYmKGkuY2FwdHVyZWQ9XyksaX1mdW5jdGlvbiBaKHIpe2Z1bmN0aW9uIGUocixlLG4sdCxv" +
+      "KXtpZihyW25dLnR5cGUhPT1ffHxvcih0KSE9PVImJm9yKHQpIT09UCllLnB1c2goSChyLG4sdCxv" +
+      "KSk7ZWxzZSBmb3IodmFyIGk9W3ksbSxTLEFdLGY9MCxhPWkubGVuZ3RoO2Y8YTtmKyspZS5wdXNo" +
+      "KEgocixuLHQsbyxpW2ZdKSl9dmFyIG49W10sdD1xLG89YXIodCksaT17YjpMLHc6d30sZj1OLmE4" +
+      "LGE9Ti5oMSxsPSExLHU9ISh2b2lkIDAhPT1yJiYibGVnYWwiaW4gcil8fHIubGVnYWw7aWYodm9p" +
+      "ZCAwIT09ciYmInNxdWFyZSJpbiByKXtpZighKHIuc3F1YXJlIGluIE4pKXJldHVybltdO2Y9YT1O" +
+      "W3Iuc3F1YXJlXSxsPSEwfWZvcih2YXIgcz1mO3M8PWE7cysrKWlmKDEzNiZzKXMrPTc7ZWxzZXt2" +
+      "YXIgcD1PW3NdO2lmKG51bGwhPXAmJnAuY29sb3I9PT10KWlmKHAudHlwZT09PV8pe3ZhciBjPXMr" +
+      "Q1t0XVswXTtpZihudWxsPT1PW2NdKXtlKE8sbixzLGMsSS5OT1JNQUwpO2M9cytDW3RdWzFdO2lb" +
+      "dF09PT1vcihzKSYmbnVsbD09T1tjXSYmZShPLG4scyxjLEkuQklHX1BBV04pfWZvcih2PTI7djw0" +
+      "O3YrKyl7MTM2JihjPXMrQ1t0XVt2XSl8fChudWxsIT1PW2NdJiZPW2NdLmNvbG9yPT09bz9lKE8s" +
+      "bixzLGMsSS5DQVBUVVJFKTpjPT09SyYmZShPLG4scyxLLEkuRVBfQ0FQVFVSRSkpfX1lbHNlIGZv" +
+      "cih2YXIgdj0wLGc9VFtwLnR5cGVdLmxlbmd0aDt2PGc7disrKXt2YXIgaD1UW3AudHlwZV1bdl07" +
+      "Zm9yKGM9czshKDEzNiYoYys9aCkpOyl7aWYobnVsbCE9T1tjXSl7aWYoT1tjXS5jb2xvcj09PXQp" +
+      "YnJlYWs7ZShPLG4scyxjLEkuQ0FQVFVSRSk7YnJlYWt9aWYoZShPLG4scyxjLEkuTk9STUFMKSwi" +
+      "biI9PT1wLnR5cGV8fCJrIj09PXAudHlwZSlicmVha319fWlmKCFsfHxhPT09a1t0XSl7aWYoRFt0" +
+      "XSZJLktTSURFX0NBU1RMRSl7dmFyIEU9KGQ9a1t0XSkrMjtudWxsIT1PW2QrMV18fG51bGwhPU9b" +
+      "RV18fFYobyxrW3RdKXx8VihvLGQrMSl8fFYobyxFKXx8ZShPLG4sa1t0XSxFLEkuS1NJREVfQ0FT" +
+      "VExFKX1pZihEW3RdJkkuUVNJREVfQ0FTVExFKXt2YXIgZDtFPShkPWtbdF0pLTI7bnVsbCE9T1tk" +
+      "LTFdfHxudWxsIT1PW2QtMl18fG51bGwhPU9bZC0zXXx8VihvLGtbdF0pfHxWKG8sZC0xKXx8Vihv" +
+      "LEUpfHxlKE8sbixrW3RdLEUsSS5RU0lERV9DQVNUTEUpfX1pZighdSlyZXR1cm4gbjt2YXIgYj1b" +
+      "XTtmb3Iocz0wLGc9bi5sZW5ndGg7czxnO3MrKyllcihuW3NdKSxYKHQpfHxiLnB1c2gobltzXSks" +
+      "bnIoKTtyZXR1cm4gYn1mdW5jdGlvbiB6KHIsZSl7dmFyIG49IiI7aWYoci5mbGFncyZJLktTSURF" +
+      "X0NBU1RMRSluPSJPLU8iO2Vsc2UgaWYoci5mbGFncyZJLlFTSURFX0NBU1RMRSluPSJPLU8tTyI7" +
+      "ZWxzZXt2YXIgdD1mdW5jdGlvbihyLGUpe2Zvcih2YXIgbj1aKHtsZWdhbDohZX0pLHQ9ci5mcm9t" +
+      "LG89ci50byxpPXIucGllY2UsZj0wLGE9MCxsPTAsdT0wLHM9bi5sZW5ndGg7dTxzO3UrKyl7dmFy" +
+      "IHA9blt1XS5mcm9tLGM9blt1XS50byx2PW5bdV0ucGllY2U7aT09PXYmJnQhPT1wJiZvPT09YyYm" +
+      "KGYrKyxvcih0KT09PW9yKHApJiZhKyssaXIodCk9PT1pcihwKSYmbCsrKX1pZigwPGYpcmV0dXJu" +
+      "IDA8YSYmMDxsP2ZyKHQpOjA8bD9mcih0KS5jaGFyQXQoMSk6ZnIodCkuY2hhckF0KDApO3JldHVy" +
+      "biIifShyLGUpO3IucGllY2UhPT1fJiYobis9ci5waWVjZS50b1VwcGVyQ2FzZSgpK3QpLHIuZmxh" +
+      "Z3MmKEkuQ0FQVFVSRXxJLkVQX0NBUFRVUkUpJiYoci5waWVjZT09PV8mJihuKz1mcihyLmZyb20p" +
+      "WzBdKSxuKz0ieCIpLG4rPWZyKHIudG8pLHIuZmxhZ3MmSS5QUk9NT1RJT04mJihuKz0iPSIrci5w" +
+      "cm9tb3Rpb24udG9VcHBlckNhc2UoKSl9cmV0dXJuIGVyKHIpLGYoKSYmKGEoKT9uKz0iIyI6bis9" +
+      "IisiKSxucigpLG59ZnVuY3Rpb24gSihyKXtyZXR1cm4gci5yZXBsYWNlKC89LywiIikucmVwbGFj" +
+      "ZSgvWysjXT9bPyFdKiQvLCIiKX1mdW5jdGlvbiBWKHIsZSl7Zm9yKHZhciBuPU4uYTg7bjw9Ti5o" +
+      "MTtuKyspaWYoMTM2Jm4pbis9NztlbHNlIGlmKG51bGwhPU9bbl0mJk9bbl0uY29sb3I9PT1yKXt2" +
+      "YXIgdD1PW25dLG89bi1lLGk9MTE5K287aWYoY1tpXSYxPDxoW3QudHlwZV0pe2lmKHQudHlwZT09" +
+      "PV8pe2lmKDA8byl7aWYodC5jb2xvcj09PXMpcmV0dXJuITB9ZWxzZSBpZih0LmNvbG9yPT09dSly" +
+      "ZXR1cm4hMDtjb250aW51ZX1pZigibiI9PT10LnR5cGV8fCJrIj09PXQudHlwZSlyZXR1cm4hMDtm" +
+      "b3IodmFyIGY9dltpXSxhPW4rZixsPSExO2EhPT1lOyl7aWYobnVsbCE9T1thXSl7bD0hMDticmVh" +
+      "a31hKz1mfWlmKCFsKXJldHVybiEwfX1yZXR1cm4hMX1mdW5jdGlvbiBYKHIpe3JldHVybiBWKGFy" +
+      "KHIpLGtbcl0pfWZ1bmN0aW9uIGYoKXtyZXR1cm4gWChxKX1mdW5jdGlvbiBhKCl7cmV0dXJuIGYo" +
+      "KSYmMD09PVooKS5sZW5ndGh9ZnVuY3Rpb24gbigpe3JldHVybiFmKCkmJjA9PT1aKCkubGVuZ3Ro" +
+      "fWZ1bmN0aW9uIFkoKXtmb3IodmFyIHI9e30sZT1bXSxuPTAsdD0wLG89Ti5hODtvPD1OLmgxO28r" +
+      "KylpZih0PSh0KzEpJTIsMTM2Jm8pbys9NztlbHNle3ZhciBpPU9bb107aSYmKHJbaS50eXBlXT1p" +
+      "LnR5cGUgaW4gcj9yW2kudHlwZV0rMToxLGkudHlwZT09PVMmJmUucHVzaCh0KSxuKyspfWlmKDI9" +
+      "PT1uKXJldHVybiEwO2lmKDM9PT1uJiYoMT09PXJbU118fDE9PT1yW0FdKSlyZXR1cm4hMDtpZihu" +
+      "PT09cltTXSsyKXt2YXIgZj0wLGE9ZS5sZW5ndGg7Zm9yKG89MDtvPGE7bysrKWYrPWVbb107aWYo" +
+      "MD09PWZ8fGY9PT1hKXJldHVybiEwfXJldHVybiExfWZ1bmN0aW9uIHJyKCl7Zm9yKHZhciByPVtd" +
+      "LGU9e30sbj0hMTs7KXt2YXIgdD1ucigpO2lmKCF0KWJyZWFrO3IucHVzaCh0KX1mb3IoOzspe3Zh" +
+      "ciBvPU0oKS5zcGxpdCgiICIpLnNsaWNlKDAsNCkuam9pbigiICIpO2lmKGVbb109byBpbiBlP2Vb" +
+      "b10rMToxLDM8PWVbb10mJihuPSEwKSwhci5sZW5ndGgpYnJlYWs7ZXIoci5wb3AoKSl9cmV0dXJu" +
+      "IG59ZnVuY3Rpb24gZXIocil7dmFyIGUsbj1xLHQ9YXIobik7aWYoZT1yLFEucHVzaCh7bW92ZTpl" +
+      "LGtpbmdzOntiOmsuYix3Omsud30sdHVybjpxLGNhc3RsaW5nOntiOkQuYix3OkQud30sZXBfc3F1" +
+      "YXJlOkssaGFsZl9tb3ZlczpkLG1vdmVfbnVtYmVyOmJ9KSxPW3IudG9dPU9bci5mcm9tXSxPW3Iu" +
+      "ZnJvbV09bnVsbCxyLmZsYWdzJkkuRVBfQ0FQVFVSRSYmKHE9PT11P09bci50by0xNl09bnVsbDpP" +
+      "W3IudG8rMTZdPW51bGwpLHIuZmxhZ3MmSS5QUk9NT1RJT04mJihPW3IudG9dPXt0eXBlOnIucHJv" +
+      "bW90aW9uLGNvbG9yOm59KSxPW3IudG9dLnR5cGU9PT1wKXtpZihrW09bci50b10uY29sb3JdPXIu" +
+      "dG8sci5mbGFncyZJLktTSURFX0NBU1RMRSl7dmFyIG89ci50by0xLGk9ci50bysxO09bb109T1tp" +
+      "XSxPW2ldPW51bGx9ZWxzZSBpZihyLmZsYWdzJkkuUVNJREVfQ0FTVExFKXtvPXIudG8rMSxpPXIu" +
+      "dG8tMjtPW29dPU9baV0sT1tpXT1udWxsfURbbl09IiJ9aWYoRFtuXSlmb3IodmFyIGY9MCxhPUVb" +
+      "bl0ubGVuZ3RoO2Y8YTtmKyspaWYoci5mcm9tPT09RVtuXVtmXS5zcXVhcmUmJkRbbl0mRVtuXVtm" +
+      "XS5mbGFnKXtEW25dXj1FW25dW2ZdLmZsYWc7YnJlYWt9aWYoRFt0XSlmb3IoZj0wLGE9RVt0XS5s" +
+      "ZW5ndGg7ZjxhO2YrKylpZihyLnRvPT09RVt0XVtmXS5zcXVhcmUmJkRbdF0mRVt0XVtmXS5mbGFn" +
+      "KXtEW3RdXj1FW3RdW2ZdLmZsYWc7YnJlYWt9Sz1yLmZsYWdzJkkuQklHX1BBV04/ImIiPT09cT9y" +
+      "LnRvLTE2OnIudG8rMTY6bCxyLnBpZWNlPT09X3x8ci5mbGFncyYoSS5DQVBUVVJFfEkuRVBfQ0FQ" +
+      "VFVSRSk/ZD0wOmQrKyxxPT09dSYmYisrLHE9YXIocSl9ZnVuY3Rpb24gbnIoKXt2YXIgcj1RLnBv" +
+      "cCgpO2lmKG51bGw9PXIpcmV0dXJuIG51bGw7dmFyIGU9ci5tb3ZlO2s9ci5raW5ncyxxPXIudHVy" +
+      "bixEPXIuY2FzdGxpbmcsSz1yLmVwX3NxdWFyZSxkPXIuaGFsZl9tb3ZlcyxiPXIubW92ZV9udW1i" +
+      "ZXI7dmFyIG4sdCxvPXEsaT1hcihxKTtpZihPW2UuZnJvbV09T1tlLnRvXSxPW2UuZnJvbV0udHlw" +
+      "ZT1lLnBpZWNlLE9bZS50b109bnVsbCxlLmZsYWdzJkkuQ0FQVFVSRSlPW2UudG9dPXt0eXBlOmUu" +
+      "Y2FwdHVyZWQsY29sb3I6aX07ZWxzZSBpZihlLmZsYWdzJkkuRVBfQ0FQVFVSRSl7dmFyIGY7Zj1v" +
+      "PT09dT9lLnRvLTE2OmUudG8rMTYsT1tmXT17dHlwZTpfLGNvbG9yOml9fWUuZmxhZ3MmKEkuS1NJ" +
+      "REVfQ0FTVExFfEkuUVNJREVfQ0FTVExFKSYmKGUuZmxhZ3MmSS5LU0lERV9DQVNUTEU/KG49ZS50" +
+      "bysxLHQ9ZS50by0xKTplLmZsYWdzJkkuUVNJREVfQ0FTVExFJiYobj1lLnRvLTIsdD1lLnRvKzEp" +
+      "LE9bbl09T1t0XSxPW3RdPW51bGwpO3JldHVybiBlfWZ1bmN0aW9uIHRyKHIsZSl7dmFyIG49Sihy" +
+      "KTtpZihlKXt2YXIgdD1uLm1hdGNoKC8oW3BuYnJxa1BOQlJRS10pPyhbYS1oXVsxLThdKXg/LT8o" +
+      "W2EtaF1bMS04XSkoW3FyYm5RUkJOXSk/Lyk7aWYodCl2YXIgbz10WzFdLGk9dFsyXSxmPXRbM10s" +
+      "YT10WzRdfWZvcih2YXIgbD1aKCksdT0wLHM9bC5sZW5ndGg7dTxzO3UrKyl7aWYobj09PUooeihs" +
+      "W3VdKSl8fGUmJm49PT1KKHoobFt1XSwhMCkpKXJldHVybiBsW3VdO2lmKHQmJighb3x8by50b0xv" +
+      "d2VyQ2FzZSgpPT1sW3VdLnBpZWNlKSYmTltpXT09bFt1XS5mcm9tJiZOW2ZdPT1sW3VdLnRvJiYo" +
+      "IWF8fGEudG9Mb3dlckNhc2UoKT09bFt1XS5wcm9tb3Rpb24pKXJldHVybiBsW3VdfXJldHVybiBu" +
+      "dWxsfWZ1bmN0aW9uIG9yKHIpe3JldHVybiByPj40fWZ1bmN0aW9uIGlyKHIpe3JldHVybiAxNSZy" +
+      "fWZ1bmN0aW9uIGZyKHIpe3ZhciBlPWlyKHIpLG49b3Iocik7cmV0dXJuImFiY2RlZmdoIi5zdWJz" +
+      "dHJpbmcoZSxlKzEpKyI4NzY1NDMyMSIuc3Vic3RyaW5nKG4sbisxKX1mdW5jdGlvbiBhcihyKXty" +
+      "ZXR1cm4gcj09PXM/dTpzfWZ1bmN0aW9uIGxyKHIpe3ZhciBlPWZ1bmN0aW9uIHIoZSl7dmFyIG49" +
+      "ZSBpbnN0YW5jZW9mIEFycmF5P1tdOnt9O2Zvcih2YXIgdCBpbiBlKW5bdF09Im9iamVjdCI9PXR5" +
+      "cGVvZiB0P3IoZVt0XSk6ZVt0XTtyZXR1cm4gbn0ocik7ZS5zYW49eihlLCExKSxlLnRvPWZyKGUu" +
+      "dG8pLGUuZnJvbT1mcihlLmZyb20pO3ZhciBuPSIiO2Zvcih2YXIgdCBpbiBJKUlbdF0mZS5mbGFn" +
+      "cyYmKG4rPW9bdF0pO3JldHVybiBlLmZsYWdzPW4sZX1mdW5jdGlvbiB1cihyKXtyZXR1cm4gci5y" +
+      "ZXBsYWNlKC9eXHMrfFxzKyQvZywiIil9cmV0dXJuIEIodm9pZCAwPT09cj9lOnIpLHtXSElURTpz" +
+      "LEJMQUNLOnUsUEFXTjpfLEtOSUdIVDpBLEJJU0hPUDpTLFJPT0s6bSxRVUVFTjp5LEtJTkc6cCxT" +
+      "UVVBUkVTOmZ1bmN0aW9uKCl7Zm9yKHZhciByPVtdLGU9Ti5hODtlPD1OLmgxO2UrKykxMzYmZT9l" +
+      "Kz03OnIucHVzaChmcihlKSk7cmV0dXJuIHJ9KCksRkxBR1M6byxsb2FkOmZ1bmN0aW9uKHIpe3Jl" +
+      "dHVybiBCKHIpfSxyZXNldDpmdW5jdGlvbigpe3JldHVybiBqKCl9LG1vdmVzOmZ1bmN0aW9uKHIp" +
+      "e2Zvcih2YXIgZT1aKHIpLG49W10sdD0wLG89ZS5sZW5ndGg7dDxvO3QrKyl2b2lkIDAhPT1yJiYi" +
+      "dmVyYm9zZSJpbiByJiZyLnZlcmJvc2U/bi5wdXNoKGxyKGVbdF0pKTpuLnB1c2goeihlW3RdLCEx" +
+      "KSk7cmV0dXJuIG59LGluX2NoZWNrOmZ1bmN0aW9uKCl7cmV0dXJuIGYoKX0saW5fY2hlY2ttYXRl" +
+      "OmZ1bmN0aW9uKCl7cmV0dXJuIGEoKX0saW5fc3RhbGVtYXRlOmZ1bmN0aW9uKCl7cmV0dXJuIG4o" +
+      "KX0saW5fZHJhdzpmdW5jdGlvbigpe3JldHVybiAxMDA8PWR8fG4oKXx8WSgpfHxycigpfSxpbnN1" +
+      "ZmZpY2llbnRfbWF0ZXJpYWw6ZnVuY3Rpb24oKXtyZXR1cm4gWSgpfSxpbl90aHJlZWZvbGRfcmVw" +
+      "ZXRpdGlvbjpmdW5jdGlvbigpe3JldHVybiBycigpfSxnYW1lX292ZXI6ZnVuY3Rpb24oKXtyZXR1" +
+      "cm4gMTAwPD1kfHxhKCl8fG4oKXx8WSgpfHxycigpfSx2YWxpZGF0ZV9mZW46ZnVuY3Rpb24ocil7" +
+      "cmV0dXJuICQocil9LGZlbjpmdW5jdGlvbigpe3JldHVybiBNKCl9LGJvYXJkOmZ1bmN0aW9uKCl7" +
+      "Zm9yKHZhciByPVtdLGU9W10sbj1OLmE4O248PU4uaDE7bisrKW51bGw9PU9bbl0/ZS5wdXNoKG51" +
+      "bGwpOmUucHVzaCh7dHlwZTpPW25dLnR5cGUsY29sb3I6T1tuXS5jb2xvcn0pLG4rMSYxMzYmJihy" +
+      "LnB1c2goZSksZT1bXSxuKz04KTtyZXR1cm4gcn0scGduOmZ1bmN0aW9uKHIpe3ZhciBlPSJvYmpl" +
+      "Y3QiPT10eXBlb2YgciYmInN0cmluZyI9PXR5cGVvZiByLm5ld2xpbmVfY2hhcj9yLm5ld2xpbmVf" +
+      "Y2hhcjoiXG4iLG49Im9iamVjdCI9PXR5cGVvZiByJiYibnVtYmVyIj09dHlwZW9mIHIubWF4X3dp" +
+      "ZHRoP3IubWF4X3dpZHRoOjAsdD1bXSxvPSExO2Zvcih2YXIgaSBpbiBVKXQucHVzaCgiWyIraSsn" +
+      "ICInK1VbaV0rJyJdJytlKSxvPSEwO28mJlEubGVuZ3RoJiZ0LnB1c2goZSk7Zm9yKHZhciBmPVtd" +
+      "OzA8US5sZW5ndGg7KWYucHVzaChucigpKTtmb3IodmFyIGE9W10sbD0iIjswPGYubGVuZ3RoOyl7" +
+      "dmFyIHU9Zi5wb3AoKTtRLmxlbmd0aHx8ImIiIT09dS5jb2xvcj8idyI9PT11LmNvbG9yJiYobC5s" +
+      "ZW5ndGgmJmEucHVzaChsKSxsPWIrIi4iKTpsPWIrIi4gLi4uIixsPWwrIiAiK3oodSwhMSksZXIo" +
+      "dSl9aWYobC5sZW5ndGgmJmEucHVzaChsKSx2b2lkIDAhPT1VLlJlc3VsdCYmYS5wdXNoKFUuUmVz" +
+      "dWx0KSwwPT09bilyZXR1cm4gdC5qb2luKCIiKSthLmpvaW4oIiAiKTt2YXIgcz0wO2ZvcihpPTA7" +
+      "aTxhLmxlbmd0aDtpKyspcythW2ldLmxlbmd0aD5uJiYwIT09aT8oIiAiPT09dFt0Lmxlbmd0aC0x" +
+      "XSYmdC5wb3AoKSx0LnB1c2goZSkscz0wKTowIT09aSYmKHQucHVzaCgiICIpLHMrKyksdC5wdXNo" +
+      "KGFbaV0pLHMrPWFbaV0ubGVuZ3RoO3JldHVybiB0LmpvaW4oIiIpfSxsb2FkX3BnbjpmdW5jdGlv" +
+      "bihyLGUpe3ZhciBuPXZvaWQgMCE9PWUmJiJzbG9wcHkiaW4gZSYmZS5zbG9wcHk7ZnVuY3Rpb24g" +
+      "bChyKXtyZXR1cm4gci5yZXBsYWNlKC9cXC9nLCJcXCIpfXZhciB0PSJvYmplY3QiPT10eXBlb2Yg" +
+      "ZSYmInN0cmluZyI9PXR5cGVvZiBlLm5ld2xpbmVfY2hhcj9lLm5ld2xpbmVfY2hhcjoiXHI/XG4i" +
+      "LG89bmV3IFJlZ0V4cCgiXihcXFsoKD86IitsKHQpKyIpfC4pKlxcXSkoPzoiK2wodCkrIil7Mn0i" +
+      "KSxpPW8udGVzdChyKT9vLmV4ZWMocilbMV06IiI7aigpO3ZhciBmPWZ1bmN0aW9uKHIsZSl7Zm9y" +
+      "KHZhciBuPSJvYmplY3QiPT10eXBlb2YgZSYmInN0cmluZyI9PXR5cGVvZiBlLm5ld2xpbmVfY2hh" +
+      "cj9lLm5ld2xpbmVfY2hhcjoiXHI/XG4iLHQ9e30sbz1yLnNwbGl0KG5ldyBSZWdFeHAobChuKSkp" +
+      "LGk9IiIsZj0iIixhPTA7YTxvLmxlbmd0aDthKyspaT1vW2FdLnJlcGxhY2UoL15cWyhbQS1aXVtB" +
+      "LVphLXpdKilccy4qXF0kLywiJDEiKSxmPW9bYV0ucmVwbGFjZSgvXlxbW0EtWmEtel0rXHMiKC4q" +
+      "KSJcXSQvLCIkMSIpLDA8dXIoaSkubGVuZ3RoJiYodFtpXT1mKTtyZXR1cm4gdH0oaSxlKTtmb3Io" +
+      "dmFyIGEgaW4gZilHKFthLGZbYV1dKTtpZigiMSI9PT1mLlNldFVwJiYhKCJGRU4iaW4gZiYmQihm" +
+      "LkZFTiwhMCkpKXJldHVybiExO3ZhciB1PXIucmVwbGFjZShpLCIiKS5yZXBsYWNlKG5ldyBSZWdF" +
+      "eHAobCh0KSwiZyIpLCIgIik7dT11LnJlcGxhY2UoLyhce1tefV0rXH0pKz8vZywiIik7Zm9yKHZh" +
+      "ciBzPS8oXChbXlwoXCldK1wpKSs/L2c7cy50ZXN0KHUpOyl1PXUucmVwbGFjZShzLCIiKTt2YXIg" +
+      "cD11cih1PSh1PSh1PXUucmVwbGFjZSgvXGQrXC4oXC5cLik/L2csIiIpKS5yZXBsYWNlKC9cLlwu" +
+      "XC4vZywiIikpLnJlcGxhY2UoL1wkXGQrL2csIiIpKS5zcGxpdChuZXcgUmVnRXhwKC9ccysvKSk7" +
+      "cD1wLmpvaW4oIiwiKS5yZXBsYWNlKC8sLCsvZywiLCIpLnNwbGl0KCIsIik7Zm9yKHZhciBjPSIi" +
+      "LHY9MDt2PHAubGVuZ3RoLTE7disrKXtpZihudWxsPT0oYz10cihwW3ZdLG4pKSlyZXR1cm4hMTtl" +
+      "cihjKX1pZihjPXBbcC5sZW5ndGgtMV0sLTE8Zy5pbmRleE9mKGMpKSFmdW5jdGlvbihyKXtmb3Io" +
+      "dmFyIGUgaW4gcilyZXR1cm4gMX0oVSl8fHZvaWQgMCE9PVUuUmVzdWx0fHxHKFsiUmVzdWx0Iixj" +
+      "XSk7ZWxzZXtpZihudWxsPT0oYz10cihjLG4pKSlyZXR1cm4hMTtlcihjKX1yZXR1cm4hMH0saGVh" +
+      "ZGVyOmZ1bmN0aW9uKCl7cmV0dXJuIEcoYXJndW1lbnRzKX0sYXNjaWk6ZnVuY3Rpb24oKXtyZXR1" +
+      "cm4gZnVuY3Rpb24oKXtmb3IodmFyIHI9IiAgICstLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0rXG4i" +
+      "LGU9Ti5hODtlPD1OLmgxO2UrKyl7aWYoMD09PWlyKGUpJiYocis9IiAiKyI4NzY1NDMyMSJbb3Io" +
+      "ZSldKyIgfCIpLG51bGw9PU9bZV0pcis9IiAuICI7ZWxzZXt2YXIgbj1PW2VdLnR5cGU7cis9IiAi" +
+      "KyhPW2VdLmNvbG9yPT09cz9uLnRvVXBwZXJDYXNlKCk6bi50b0xvd2VyQ2FzZSgpKSsiICJ9ZSsx" +
+      "JjEzNiYmKHIrPSJ8XG4iLGUrPTgpfXJldHVybiByKz0iICAgKy0tLS0tLS0tLS0tLS0tLS0tLS0t" +
+      "LS0tLStcbiIscis9IiAgICAgYSAgYiAgYyAgZCAgZSAgZiAgZyAgaFxuIn0oKX0sdHVybjpmdW5j" +
+      "dGlvbigpe3JldHVybiBxfSxtb3ZlOmZ1bmN0aW9uKHIsZSl7dmFyIG49dm9pZCAwIT09ZSYmInNs" +
+      "b3BweSJpbiBlJiZlLnNsb3BweSx0PW51bGw7aWYoInN0cmluZyI9PXR5cGVvZiByKXQ9dHIocixu" +
+      "KTtlbHNlIGlmKCJvYmplY3QiPT10eXBlb2Ygcilmb3IodmFyIG89WigpLGk9MCxmPW8ubGVuZ3Ro" +
+      "O2k8ZjtpKyspaWYoIShyLmZyb20hPT1mcihvW2ldLmZyb20pfHxyLnRvIT09ZnIob1tpXS50byl8" +
+      "fCJwcm9tb3Rpb24iaW4gb1tpXSYmci5wcm9tb3Rpb24hPT1vW2ldLnByb21vdGlvbikpe3Q9b1tp" +
+      "XTticmVha31pZighdClyZXR1cm4gbnVsbDt2YXIgYT1scih0KTtyZXR1cm4gZXIodCksYX0sdW5k" +
+      "bzpmdW5jdGlvbigpe3ZhciByPW5yKCk7cmV0dXJuIHI/bHIocik6bnVsbH0sY2xlYXI6ZnVuY3Rp" +
+      "b24oKXtyZXR1cm4geCgpfSxwdXQ6ZnVuY3Rpb24ocixlKXtyZXR1cm4gVyhyLGUpfSxnZXQ6ZnVu" +
+      "Y3Rpb24ocil7cmV0dXJuIGkocil9LHJlbW92ZTpmdW5jdGlvbihyKXtyZXR1cm4gbj1pKGU9ciks" +
+      "T1tOW2VdXT1udWxsLG4mJm4udHlwZT09PXAmJihrW24uY29sb3JdPWwpLEYoTSgpKSxuO3ZhciBl" +
+      "LG59LHBlcmZ0OmZ1bmN0aW9uKHIpe3JldHVybiBmdW5jdGlvbiByKGUpe2Zvcih2YXIgbj1aKHts" +
+      "ZWdhbDohMX0pLHQ9MCxvPXEsaT0wLGY9bi5sZW5ndGg7aTxmO2krKyllcihuW2ldKSxYKG8pfHwo" +
+      "MDxlLTE/dCs9cihlLTEpOnQrKyksbnIoKTtyZXR1cm4gdH0ocil9LHNxdWFyZV9jb2xvcjpmdW5j" +
+      "dGlvbihyKXtpZihyIGluIE4pe3ZhciBlPU5bcl07cmV0dXJuKG9yKGUpK2lyKGUpKSUyPT0wPyJs" +
+      "aWdodCI6ImRhcmsifXJldHVybiBudWxsfSxoaXN0b3J5OmZ1bmN0aW9uKHIpe2Zvcih2YXIgZT1b" +
+      "XSxuPVtdLHQ9KHZvaWQgMCE9PXImJiJ2ZXJib3NlImluIHImJnIudmVyYm9zZSk7MDxRLmxlbmd0" +
+      "aDspZS5wdXNoKG5yKCkpO2Zvcig7MDxlLmxlbmd0aDspe3ZhciBvPWUucG9wKCk7dD9uLnB1c2go" +
+      "bHIobykpOm4ucHVzaCh6KG8pKSxlcihvKX1yZXR1cm4gbn19fTsidW5kZWZpbmVkIiE9dHlwZW9m" +
+      "IGV4cG9ydHMmJihleHBvcnRzLkNoZXNzPUNoZXNzKSwidW5kZWZpbmVkIiE9dHlwZW9mIGRlZmlu" +
+      "ZSYmZGVmaW5lKGZ1bmN0aW9uKCl7cmV0dXJuIENoZXNzfSk7"
+    ;
+    // Decode the base64-encoded chess.js library and evaluate it
+    eval(atob(chessJsBase64));
+  </script>
+  <script>
+    // Custom logic for the blind chess trainer.
+    document.addEventListener('DOMContentLoaded', function () {
+      // Create a new game instance. The Chess constructor comes from chess.js.
+      const chess = new Chess();
+
+      const moveInput = document.getElementById('moveInput');
+      const moveBtn = document.getElementById('moveBtn');
+      const toggleBoardBtn = document.getElementById('toggleBoardBtn');
+      const resetBtn = document.getElementById('resetBtn');
+      const logDiv = document.getElementById('log');
+      const boardDiv = document.getElementById('board');
+      const messagesDiv = document.getElementById('messages');
+      const difficultySelect = document.getElementById('difficulty');
+      // The AI always plays black in this trainer
+      const aiColor = 'b';
+      // Piece values used for simple material evaluation (pawns, knights/bishops, rooks, queens, king)
+      const pieceValues = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+
+      // Track whether the board is visible or not.
+      let boardVisible = false;
+
+      // Convert a piece descriptor from chess.js into a Unicode symbol.
+      function pieceUnicode(piece) {
+        if (!piece) return '';
+        const symbols = {
+          p: { w: '♙', b: '♟' },
+          n: { w: '♘', b: '♞' },
+          b: { w: '♗', b: '♝' },
+          r: { w: '♖', b: '♜' },
+          q: { w: '♕', b: '♛' },
+          k: { w: '♔', b: '♚' }
+        };
+        return symbols[piece.type][piece.color] || '';
+      }
+
+      // Render the board into a table using the current game state.
+      function renderBoard() {
+        const boardState = chess.board();
+        const table = document.createElement('table');
+        table.className = 'board-table';
+        for (let r = 0; r < boardState.length; r++) {
+          const row = document.createElement('tr');
+          for (let c = 0; c < boardState[r].length; c++) {
+            const cell = document.createElement('td');
+            const isLight = (r + c) % 2 === 0;
+            cell.className = isLight ? 'light' : 'dark';
+            const piece = boardState[r][c];
+            cell.textContent = pieceUnicode(piece);
+            row.appendChild(cell);
+          }
+          table.appendChild(row);
+        }
+        boardDiv.innerHTML = '';
+        boardDiv.appendChild(table);
+      }
+
+      // Display a message to the user. Use red for errors and green for normal feedback.
+      function showMessage(message, isError) {
+        messagesDiv.textContent = message;
+        messagesDiv.style.color = isError ? 'red' : 'green';
+      }
+
+      // Update the move history log. Moves are numbered and displayed on separate lines.
+      function updateLog() {
+        const history = chess.history({ verbose: true });
+        let output = '';
+        let moveNumber = 1;
+        history.forEach((move, index) => {
+          if (index % 2 === 0) {
+            output += `${moveNumber}. ${move.san}`;
+          } else {
+            output += ` ${move.san}\n`;
+            moveNumber++;
+          }
+        });
+        if (history.length % 2 !== 0) {
+          output += '\n';
+        }
+        logDiv.textContent = output;
+      }
+
+      // === AI evaluation and move selection functions ===
+      // Evaluate the board from the AI's perspective (black).
+      // Positive numbers favor black, negative favor white.
+      function evaluateBoard() {
+        // Return extreme values when the game is over
+        if (chess.in_checkmate()) {
+          return chess.turn() === aiColor ? -Infinity : Infinity;
+        }
+        if (chess.in_stalemate() || chess.in_draw() || chess.in_threefold_repetition()) {
+          return 0;
+        }
+        let total = 0;
+        const boardState = chess.board();
+        for (let r = 0; r < boardState.length; r++) {
+          for (let c = 0; c < boardState[r].length; c++) {
+            const piece = boardState[r][c];
+            if (piece) {
+              const value = pieceValues[piece.type];
+              total += piece.color === aiColor ? value : -value;
+            }
+          }
+        }
+        return total;
+      }
+
+      // Minimax search with alpha-beta pruning.
+      function minimax(depth, alpha, beta, isMaximizingPlayer) {
+        if (depth === 0 || chess.in_checkmate() || chess.in_stalemate() || chess.in_draw() || chess.in_threefold_repetition()) {
+          return evaluateBoard();
+        }
+        const moves = chess.moves();
+        if (isMaximizingPlayer) {
+          let maxEval = -Infinity;
+          for (let i = 0; i < moves.length; i++) {
+            const move = moves[i];
+            chess.move(move);
+            const evalScore = minimax(depth - 1, alpha, beta, false);
+            chess.undo();
+            if (evalScore > maxEval) {
+              maxEval = evalScore;
+            }
+            if (evalScore > alpha) {
+              alpha = evalScore;
+            }
+            if (beta <= alpha) {
+              break;
+            }
+          }
+          return maxEval;
+        } else {
+          let minEval = Infinity;
+          for (let i = 0; i < moves.length; i++) {
+            const move = moves[i];
+            chess.move(move);
+            const evalScore = minimax(depth - 1, alpha, beta, true);
+            chess.undo();
+            if (evalScore < minEval) {
+              minEval = evalScore;
+            }
+            if (evalScore < beta) {
+              beta = evalScore;
+            }
+            if (beta <= alpha) {
+              break;
+            }
+          }
+          return minEval;
+        }
+      }
+
+      // Determine the best move for the AI (black) by evaluating all legal moves to a certain depth.
+      function findBestMove(depth) {
+        let bestMove = null;
+        let bestValue = -Infinity;
+        const moves = chess.moves();
+        for (let i = 0; i < moves.length; i++) {
+          const move = moves[i];
+          chess.move(move);
+          const evalValue = minimax(depth - 1, -Infinity, Infinity, false);
+          chess.undo();
+          if (evalValue > bestValue) {
+            bestValue = evalValue;
+            bestMove = move;
+          }
+        }
+        return bestMove;
+      }
+
+      // Have the AI play a move after the human has moved. This function runs asynchronously
+      // to keep the UI responsive.
+      function makeAIMove() {
+        const depth = parseInt(difficultySelect.value, 10);
+        setTimeout(() => {
+          const bestMove = findBestMove(depth);
+          if (bestMove) {
+            const result = chess.move(bestMove);
+            showMessage(`Computer plays ${result.san}.`, false);
+            updateLog();
+            if (boardVisible) {
+              renderBoard();
+            }
+            if (chess.in_checkmate()) {
+              showMessage('Checkmate! Game over.', false);
+            } else if (chess.in_stalemate()) {
+              showMessage('Stalemate! Game over.', false);
+            } else if (chess.in_draw()) {
+              showMessage('Draw by 50‑move rule, stalemate or insufficient material.', false);
+            } else if (chess.in_threefold_repetition()) {
+              showMessage('Draw by threefold repetition.', false);
+            } else if (chess.in_check()) {
+              showMessage('Check!', false);
+            }
+          }
+        }, 50);
+      }
+
+      // Process a move string entered by the user.
+      function handleMove() {
+        const moveStr = moveInput.value.trim();
+        if (moveStr === '') return;
+        try {
+          const moveResult = chess.move(moveStr, { sloppy: true });
+          if (moveResult === null) {
+            showMessage('Illegal move. Please try again.', true);
+          } else {
+            // Human move accepted
+            showMessage(`Move ${moveResult.san} played.`, false);
+            updateLog();
+            if (boardVisible) {
+              renderBoard();
+            }
+            // Assess game state after the human move
+            let gameEnded = false;
+            if (chess.in_checkmate()) {
+              showMessage('Checkmate! Game over.', false);
+              gameEnded = true;
+            } else if (chess.in_stalemate()) {
+              showMessage('Stalemate! Game over.', false);
+              gameEnded = true;
+            } else if (chess.in_draw()) {
+              showMessage('Draw by 50‑move rule, stalemate or insufficient material.', false);
+              gameEnded = true;
+            } else if (chess.in_threefold_repetition()) {
+              showMessage('Draw by threefold repetition.', false);
+              gameEnded = true;
+            } else if (chess.in_check()) {
+              showMessage('Check!', false);
+            }
+            // If it's now the AI's turn and the game is not over, let the AI respond
+            if (!gameEnded && chess.turn() === aiColor) {
+              makeAIMove();
+            }
+          }
+        } catch (err) {
+          showMessage('Illegal move. Please try again.', true);
+        }
+        moveInput.value = '';
+        moveInput.focus();
+      }
+
+      moveBtn.addEventListener('click', handleMove);
+
+      moveInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+          handleMove();
+          e.preventDefault();
+        }
+      });
+
+      toggleBoardBtn.addEventListener('click', function () {
+        boardVisible = !boardVisible;
+        if (boardVisible) {
+          renderBoard();
+          boardDiv.style.display = 'block';
+          toggleBoardBtn.textContent = 'Hide Board';
+        } else {
+          boardDiv.style.display = 'none';
+          toggleBoardBtn.textContent = 'Show Board';
+        }
+      });
+
+      resetBtn.addEventListener('click', function () {
+        chess.reset();
+        boardVisible = false;
+        boardDiv.style.display = 'none';
+        toggleBoardBtn.textContent = 'Show Board';
+        logDiv.textContent = '';
+        showMessage('Game has been reset.', false);
+        moveInput.value = '';
+      });
+    });
+  </script>
+</body>
+</html>
